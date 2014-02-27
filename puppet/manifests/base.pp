@@ -36,8 +36,14 @@ class { 'mysql':
  * Magento config
  */
 class { 'magento':
+    /* install sample data [true|false] */
+    install_sample =>  false,
+
     /* install magento [true|false] */
     install =>  false,
+
+    /* magento sample version */
+    version_sample    => '1.6.1.0',
 
     /* magento version */
     version     => '1.8.1.0',
@@ -51,6 +57,7 @@ class { 'magento':
     #version    => '1.5.0.1',
 
     /* magento database settings */
+    db_name     => 'magentodb',
     db_user     => 'magento',
     db_pass     => 'magento',
 

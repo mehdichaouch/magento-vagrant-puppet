@@ -1,23 +1,53 @@
-class magento( $install, $db_user, $db_pass, $version, $admin_user, $admin_pass, $use_rewrites) {
+class magento( $install, $install_sample, $db_name, $db_user, $db_pass, $version, $version_sample, $admin_user, $admin_pass, $use_rewrites) {
 
     if $install {
 
         exec { "create-magentodb-db":
-            unless  => "/usr/bin/mysql -uroot -p${mysql::root_pass} magentodb",
-            command => "/usr/bin/mysqladmin -uroot -p${$mysql::root_pass} create magentodb",
+            unless  => "/usr/bin/mysql -uroot -p${mysql::root_pass} ${db_name}",
+            command => "/usr/bin/mysqladmin -uroot -p${$mysql::root_pass} create ${db_name}",
             require => Service["mysql"],
         }
 
         exec { "grant-magentodb-db-all":
-            unless  => "/usr/bin/mysql -u${db_user} -p${db_pass} magentodb",
+            unless  => "/usr/bin/mysql -u${db_user} -p${db_pass} ${db_name}",
             command => "/usr/bin/mysql -uroot -p${$mysql::root_pass} -e \"grant all on *.* to magento@'%' identified by '${db_pass}' WITH GRANT OPTION;\"",
             require => [ Service["mysql"], Exec["create-magentodb-db"] ],
         }
 
         exec { "grant-magentodb-db-localhost":
-            unless  => "/usr/bin/mysql -u${db_user} -p${db_pass} magentodb",
+            unless  => "/usr/bin/mysql -u${db_user} -p${db_pass} ${db_name}",
             command => "/usr/bin/mysql -uroot -p${$mysql::root_pass} -e \"grant all on *.* to magento@'localhost' identified by '${db_pass}' WITH GRANT OPTION;\"",
             require => Exec["grant-magentodb-db-all"],
+        }
+
+        if $install_sample {
+
+            exec { "download-magento-sample":
+                cwd     => "/tmp",
+                command => "/usr/bin/wget http://www.magentocommerce.com/downloads/assets/${version_sample}/magento-sample-data-${version_sample}.tar.gz",
+                creates => "/tmp/magento-sample-data-${version_sample}.tar.gz",
+            }
+
+            exec { "untar-magento-sample":
+                cwd     => "/tmp",
+                command => "/bin/tar xvzf /tmp/magento-sample-data-${version_sample}.tar.gz",
+                timeout => 600,
+                require => Exec["download-magento-sample"],
+            }
+
+            exec { "import-magento-sample-db":
+                cwd     => $apache2::document_root,
+                unless  => "/usr/bin/mysql -u${db_user} -p${db_pass} ${db_name}",
+                command => "/usr/bin/mysql -uroot -p${$mysql::root_pass} ${db_name} < /tmp/magento-sample-data-${version_sample}/magento_sample_data_for_${version_sample}.sql",
+                require => [ Service["mysql"], Exec["create-magentodb-db"], Exec["untar-magento-sample"] ],
+            }
+
+            exec { "copy-magento-media":
+                cwd     => "$apache2::document_root/magento",
+                command => "/bin/cp -R /tmp/magento-sample-data-${version_sample}/media media",
+                require => Exec["untar-magento-sample"],
+            }
+
         }
 
         exec { "download-magento":
@@ -52,7 +82,7 @@ class magento( $install, $db_user, $db_pass, $version, $admin_user, $admin_pass,
                 --timezone \"America/Los_Angeles\" \
                 --default_currency \"USD\" \
                 --db_host \"localhost\" \
-                --db_name \"magentodb\" \
+                --db_name \"${db_name}\" \
                 --db_user \"${db_user}\" \
                 --db_pass \"${db_pass}\" \
                 --url \"http://magento.localhost:8080/magento\" \
